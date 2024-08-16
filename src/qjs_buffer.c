@@ -264,15 +264,6 @@ static JSClassDef qjs_buffer_class = {
 
 static JSClassID qjs_buffer_class_id;
 
-#ifndef NJS_HAVE_QUICKJS_NEW_TYPED_ARRAY
-static JSClassDef qjs_uint8_array_ctor_class = {
-    "Uint8ArrayConstructor",
-    .finalizer = NULL,
-};
-
-static JSClassID qjs_uint8_array_ctor_id;
-#endif
-
 
 qjs_module_t  qjs_buffer_module = {
     .name = "buffer",
@@ -332,14 +323,25 @@ static u_char   qjs_basis64url_enc[] =
 #define qjs_base64_decoded_length(len, pad)  (((len / 4) * 3) - pad)
 
 
+static int qjs_single_warning = 1;
+
 static JSValue
 qjs_buffer(JSContext *ctx, JSValueConst this_val, int argc,
     JSValueConst *argv)
 {
-    JS_ThrowTypeError(ctx, "Buffer() is deprecated. Use the Buffer.alloc() "
-                      "or Buffer.from() methods instead.");
+    if (qjs_single_warning) {
+        fprintf(stderr, "DeprecationWarning: Buffer() is deprecated"
+                " due to security and usability issues."
+                " Please use the Buffer.alloc(), Buffer.allocUnsafe(),"
+                " or Buffer.from() methods instead.\n");
+        qjs_single_warning = 0;
+    }
 
-    return JS_EXCEPTION;
+    if (argc == 1 && JS_IsNumber(argv[0])) {
+        return qjs_bufferobj_alloc(ctx, this_val, argc, argv, 1);
+    }
+
+    return qjs_buffer_from(ctx, this_val, argc, argv);
 }
 
 
@@ -2506,10 +2508,9 @@ qjs_new_uint8_array(JSContext *ctx, int argc, JSValueConst *argv)
 static int
 qjs_buffer_builtin_init(JSContext *ctx)
 {
-    int        rc;
-    JSAtom     species_atom;
-    JSValue    global_obj, buffer, proto, ctor, ta, ta_proto, symbol, species;
-    JSClassID  u8_ta_class_id;
+    int      rc;
+    JSAtom   species_atom;
+    JSValue  global_obj, buffer, proto, ctor, ctor1, ta_proto, symbol, species;
 
     JS_NewClassID(&qjs_buffer_class_id);
     JS_NewClass(JS_GetRuntime(ctx), qjs_buffer_class_id, &qjs_buffer_class);
@@ -2522,34 +2523,19 @@ qjs_buffer_builtin_init(JSContext *ctx)
 
     ctor = JS_GetPropertyStr(ctx, global_obj, "Uint8Array");
 
-#ifndef NJS_HAVE_QUICKJS_NEW_TYPED_ARRAY
-    /*
-     * Workaround for absence of JS_NewTypedArray() in QuickJS.
-     * We use JS_SetClassProto()/JS_GetClassProto() as a key-value store
-     * for fast value query by class ID without querying the global object.
-     */
-    JS_NewClassID(&qjs_uint8_array_ctor_id);
-    JS_NewClass(JS_GetRuntime(ctx), qjs_uint8_array_ctor_id,
-                &qjs_uint8_array_ctor_class);
-    JS_SetClassProto(ctx, qjs_uint8_array_ctor_id, JS_DupValue(ctx, ctor));
-#endif
-
-    ta = JS_CallConstructor(ctx, ctor, 0, NULL);
-    u8_ta_class_id = JS_GetClassID(ta);
-    JS_FreeValue(ctx, ta);
-    JS_FreeValue(ctx, ctor);
-
-    ta_proto = JS_GetClassProto(ctx, u8_ta_class_id);
+    ta_proto = JS_GetPropertyStr(ctx, ctor, "prototype");
     JS_SetPrototype(ctx, proto, ta_proto);
     JS_FreeValue(ctx, ta_proto);
 
     JS_SetClassProto(ctx, qjs_buffer_class_id, proto);
 
     buffer = JS_NewCFunction2(ctx, qjs_buffer, "Buffer", 3,
-                              JS_CFUNC_constructor, 0);
+                              JS_CFUNC_generic, 0);
     if (JS_IsException(buffer)) {
         return -1;
     }
+
+    JS_SetConstructorBit(ctx, buffer, 1);
 
     JS_SetConstructor(ctx, buffer, proto);
 
@@ -2562,13 +2548,18 @@ qjs_buffer_builtin_init(JSContext *ctx)
     species_atom = JS_ValueToAtom(ctx, species);
     JS_FreeValue(ctx, species);
 
-    ctor = JS_NewCFunction2(ctx, qjs_buffer_ctor, "Buffer species ctor", 3,
+    ctor1 = JS_NewCFunction2(ctx, qjs_buffer_ctor, "FastBuffer", 3,
                             JS_CFUNC_constructor, 0);
 
-    JS_SetProperty(ctx, buffer, species_atom, ctor);
+    JS_SetProperty(ctx, buffer, species_atom, ctor1);
     JS_FreeAtom(ctx, species_atom);
 
     rc = JS_SetPropertyStr(ctx, global_obj, "Buffer", buffer);
+    if (rc == -1) {
+        return -1;
+    }
+
+    rc = JS_SetPropertyStr(ctx, buffer, "__proto__", ctor);
     if (rc == -1) {
         return -1;
     }
