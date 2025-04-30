@@ -1771,10 +1771,15 @@ njs_regexp_prototype_symbol_split(njs_vm_t *vm, njs_value_t *args,
                 return NJS_ERROR;
             }
 
-            (void) njs_string_prop(vm, &sv, retval);
+            if (njs_is_string(retval)) {
+                (void) njs_string_prop(vm, &sv, retval);
 
-            ret = njs_array_string_add(vm, array, sv.start, sv.size,
-                                       sv.length);
+                ret = njs_array_string_add(vm, array, sv.start, sv.size,
+                                           sv.length);
+
+            } else {
+                ret = njs_array_add(vm, array, retval);
+            }
             if (njs_slow_path(ret != NJS_OK)) {
                 return ret;
             }
