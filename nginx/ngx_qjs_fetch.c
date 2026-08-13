@@ -50,9 +50,6 @@ static ngx_int_t ngx_qjs_fetch_append_headers(ngx_js_http_t *http,
 static void ngx_qjs_fetch_process_done(ngx_js_http_t *http);
 static ngx_int_t ngx_qjs_headers_result(JSContext *cx,
     ngx_js_headers_rc_t rc);
-static ngx_int_t ngx_qjs_headers_update(JSContext *cx, ngx_pool_t *pool,
-    ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
-    size_t vlen, njs_bool_t replace);
 static ngx_int_t ngx_qjs_headers_append(JSContext *cx,
     ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
     size_t vlen);
@@ -1382,25 +1379,14 @@ ngx_qjs_headers_result(JSContext *cx, ngx_js_headers_rc_t rc)
 
 
 static ngx_int_t
-ngx_qjs_headers_update(JSContext *cx, ngx_pool_t *pool,
-    ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
-    size_t vlen, njs_bool_t replace)
-{
-    ngx_js_headers_rc_t  rc;
-
-    rc = ngx_js_headers_modify(pool, headers, name, len, &value, &vlen,
-                               replace);
-
-    return ngx_qjs_headers_result(cx, rc);
-}
-
-
-static ngx_int_t
 ngx_qjs_headers_append(JSContext *cx, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen)
 {
-    return ngx_qjs_headers_update(cx, NULL, headers, name, len, value, vlen,
-                                  0);
+    ngx_js_headers_rc_t  rc;
+
+    rc = ngx_js_headers_modify(NULL, headers, name, len, value, vlen, 0);
+
+    return ngx_qjs_headers_result(cx, rc);
 }
 
 
@@ -1898,10 +1884,11 @@ static JSValue
 ngx_qjs_ext_fetch_headers_set(JSContext *cx, JSValueConst this_val,
     int argc, JSValueConst *argv)
 {
-    ngx_int_t          rc;
-    ngx_str_t          name, value;
-    ngx_pool_t        *pool;
-    ngx_js_headers_t  *headers;
+    ngx_int_t            rc;
+    ngx_str_t            name, value;
+    ngx_pool_t          *pool;
+    ngx_js_headers_t    *headers;
+    ngx_js_headers_rc_t  hrc;
 
     headers = JS_GetOpaque(this_val, NGX_QJS_CLASS_ID_FETCH_HEADERS);
     if (headers == NULL) {
@@ -1927,10 +1914,10 @@ ngx_qjs_ext_fetch_headers_set(JSContext *cx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    rc = ngx_qjs_headers_update(cx, pool, headers, name.data, name.len,
+    hrc = ngx_js_headers_modify(pool, headers, name.data, name.len,
                                 value.data, value.len, 1);
     JS_FreeCString(cx, (const char *) name.data);
-    if (rc != NGX_OK) {
+    if (ngx_qjs_headers_result(cx, hrc) != NGX_OK) {
         return JS_EXCEPTION;
     }
 

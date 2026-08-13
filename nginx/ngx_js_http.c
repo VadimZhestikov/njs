@@ -1835,21 +1835,20 @@ ngx_js_headers_error(ngx_js_headers_rc_t rc)
 
 ngx_js_headers_rc_t
 ngx_js_headers_modify(ngx_pool_t *pool, ngx_js_headers_t *headers,
-    u_char *name, size_t len, u_char **value, size_t *vlen,
-    njs_bool_t replace)
+    u_char *name, size_t len, u_char *value, size_t vlen, njs_bool_t replace)
 {
     u_char           *p;
     ngx_uint_t        i;
     ngx_list_part_t  *part;
     ngx_js_tb_elt_t  *first, *h, **ph;
 
-    ngx_js_http_trim_ows(value, vlen);
+    ngx_js_http_trim_ows(&value, &vlen);
 
     if (ngx_js_check_header_name(name, len) != NGX_OK) {
         return NGX_JS_HEADERS_INVALID_NAME;
     }
 
-    if (ngx_js_check_header_value(*value, *vlen) != NGX_OK) {
+    if (ngx_js_check_header_value(value, vlen) != NGX_OK) {
         return NGX_JS_HEADERS_INVALID_VALUE;
     }
 
@@ -1883,8 +1882,8 @@ ngx_js_headers_modify(ngx_pool_t *pool, ngx_js_headers_t *headers,
             first = &h[i];
 
             if (replace) {
-                first->value.data = *value;
-                first->value.len = *vlen;
+                first->value.data = value;
+                first->value.len = vlen;
             }
 
             continue;
@@ -1934,8 +1933,8 @@ ngx_js_headers_modify(ngx_pool_t *pool, ngx_js_headers_t *headers,
     h->hash = 1;
     h->key.data = name;
     h->key.len = len;
-    h->value.data = *value;
-    h->value.len = *vlen;
+    h->value.data = value;
+    h->value.len = vlen;
     h->next = NULL;
 
     return NGX_JS_HEADERS_OK;

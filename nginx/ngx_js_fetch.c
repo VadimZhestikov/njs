@@ -57,9 +57,6 @@ static ngx_int_t ngx_js_fetch_append_headers(ngx_js_http_t *http,
 static void ngx_js_fetch_process_done(ngx_js_http_t *http);
 static njs_int_t ngx_js_headers_result(njs_vm_t *vm,
     ngx_js_headers_rc_t rc);
-static njs_int_t ngx_js_headers_update(njs_vm_t *vm,
-    ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
-    size_t vlen, njs_bool_t replace);
 static njs_int_t ngx_js_headers_append(njs_vm_t *vm, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen);
 
@@ -1550,23 +1547,14 @@ ngx_js_headers_result(njs_vm_t *vm, ngx_js_headers_rc_t rc)
 
 
 static njs_int_t
-ngx_js_headers_update(njs_vm_t *vm, ngx_js_headers_t *headers,
-    u_char *name, size_t len, u_char *value, size_t vlen, njs_bool_t replace)
-{
-    ngx_js_headers_rc_t  rc;
-
-    rc = ngx_js_headers_modify(NULL, headers, name, len, &value, &vlen,
-                               replace);
-
-    return ngx_js_headers_result(vm, rc);
-}
-
-
-static njs_int_t
 ngx_js_headers_append(njs_vm_t *vm, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen)
 {
-    return ngx_js_headers_update(vm, headers, name, len, value, vlen, 0);
+    ngx_js_headers_rc_t  rc;
+
+    rc = ngx_js_headers_modify(NULL, headers, name, len, value, vlen, 0);
+
+    return ngx_js_headers_result(vm, rc);
 }
 
 
@@ -1980,9 +1968,10 @@ static njs_int_t
 ngx_headers_js_ext_set(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
     njs_index_t unused, njs_value_t *retval)
 {
-    njs_int_t          ret;
-    njs_str_t          name, value;
-    ngx_js_headers_t  *headers;
+    njs_int_t            ret;
+    njs_str_t            name, value;
+    ngx_js_headers_t    *headers;
+    ngx_js_headers_rc_t  rc;
 
     headers = njs_vm_external(vm, ngx_http_js_fetch_headers_proto_id,
                               njs_argument(args, 0));
@@ -2001,9 +1990,9 @@ ngx_headers_js_ext_set(njs_vm_t *vm, njs_value_t *args, njs_uint_t nargs,
         return NJS_ERROR;
     }
 
-    ret = ngx_js_headers_update(vm, headers, name.start, name.length,
-                                value.start, value.length, 1);
-    if (ret != NJS_OK) {
+    rc = ngx_js_headers_modify(NULL, headers, name.start, name.length,
+                               value.start, value.length, 1);
+    if (ngx_js_headers_result(vm, rc) != NJS_OK) {
         return NJS_ERROR;
     }
 
