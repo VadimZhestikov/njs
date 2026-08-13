@@ -50,7 +50,7 @@ static ngx_int_t ngx_qjs_fetch_append_headers(ngx_js_http_t *http,
 static void ngx_qjs_fetch_process_done(ngx_js_http_t *http);
 static ngx_int_t ngx_qjs_headers_result(JSContext *cx,
     ngx_js_headers_rc_t rc);
-static ngx_int_t ngx_qjs_headers_update(JSContext *cx,
+static ngx_int_t ngx_qjs_headers_update(JSContext *cx, ngx_pool_t *pool,
     ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
     size_t vlen, njs_bool_t replace);
 static ngx_int_t ngx_qjs_headers_append(JSContext *cx,
@@ -1382,12 +1382,14 @@ ngx_qjs_headers_result(JSContext *cx, ngx_js_headers_rc_t rc)
 
 
 static ngx_int_t
-ngx_qjs_headers_update(JSContext *cx, ngx_js_headers_t *headers,
-    u_char *name, size_t len, u_char *value, size_t vlen, njs_bool_t replace)
+ngx_qjs_headers_update(JSContext *cx, ngx_pool_t *pool,
+    ngx_js_headers_t *headers, u_char *name, size_t len, u_char *value,
+    size_t vlen, njs_bool_t replace)
 {
     ngx_js_headers_rc_t  rc;
 
-    rc = ngx_js_headers_modify(headers, name, len, &value, &vlen, replace);
+    rc = ngx_js_headers_modify(pool, headers, name, len, &value, &vlen,
+                               replace);
 
     return ngx_qjs_headers_result(cx, rc);
 }
@@ -1397,7 +1399,8 @@ static ngx_int_t
 ngx_qjs_headers_append(JSContext *cx, ngx_js_headers_t *headers,
     u_char *name, size_t len, u_char *value, size_t vlen)
 {
-    return ngx_qjs_headers_update(cx, headers, name, len, value, vlen, 0);
+    return ngx_qjs_headers_update(cx, NULL, headers, name, len, value, vlen,
+                                  0);
 }
 
 
@@ -1924,7 +1927,7 @@ ngx_qjs_ext_fetch_headers_set(JSContext *cx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    rc = ngx_qjs_headers_update(cx, headers, name.data, name.len,
+    rc = ngx_qjs_headers_update(cx, pool, headers, name.data, name.len,
                                 value.data, value.len, 1);
     JS_FreeCString(cx, (const char *) name.data);
     if (rc != NGX_OK) {

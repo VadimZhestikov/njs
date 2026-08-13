@@ -1555,7 +1555,8 @@ ngx_js_headers_update(njs_vm_t *vm, ngx_js_headers_t *headers,
 {
     ngx_js_headers_rc_t  rc;
 
-    rc = ngx_js_headers_modify(headers, name, len, &value, &vlen, replace);
+    rc = ngx_js_headers_modify(NULL, headers, name, len, &value, &vlen,
+                               replace);
 
     return ngx_js_headers_result(vm, rc);
 }
